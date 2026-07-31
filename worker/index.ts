@@ -74,7 +74,7 @@ async function getWeather() {
     forecast_hours: "12",
     forecast_days: "4",
     current: "temperature_2m,weather_code",
-    hourly: "temperature_2m,precipitation,weather_code",
+    hourly: "temperature_2m,precipitation,precipitation_probability,weather_code",
     daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
   });
   const response = await fetch(`https://api.open-meteo.com/v1/forecast?${query}`);
@@ -101,6 +101,22 @@ async function getWeather() {
         `${Math.round(result.daily.temperature_2m_min[day])}°`,
         `${result.daily.precipitation_probability_max[day]}%`,
       ]),
+      todayTomorrow: result.daily.time.slice(0, 2).map((date: string, day: number) => {
+        const probability = (fromHour: number, toHour: number) => {
+          const values = result.hourly.time.map((time: string, hour: number) => ({ time, value: result.hourly.precipitation_probability[hour] }))
+            .filter(({ time }: { time: string }) => time.startsWith(date) && Number(time.slice(11, 13)) >= fromHour && Number(time.slice(11, 13)) <= toHour)
+            .map(({ value }: { value: number }) => value);
+          return values.length ? Math.max(...values) : 0;
+        };
+        return {
+          key: day === 0 ? "today" : "tomorrow",
+          emoji: weatherEmoji(result.daily.weather_code[day]),
+          high: Math.round(result.daily.temperature_2m_max[day]),
+          low: Math.round(result.daily.temperature_2m_min[day]),
+          morning: probability(0, 11),
+          afternoon: probability(12, 23),
+        };
+      }),
     })),
   };
 }

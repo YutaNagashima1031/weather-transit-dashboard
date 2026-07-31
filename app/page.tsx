@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-type Place = { name: string; summary: string; now: string; high: number; low: number; hourly: string[][]; days?: string[][] };
+type TodayForecast = { key: "today" | "tomorrow"; emoji: string; high: number; low: number; morning: number; afternoon: number };
+type Place = { name: string; summary: string; now: string; high: number; low: number; hourly: string[][]; days?: string[][]; todayTomorrow?: TodayForecast[] };
 type Temperature = { cpuTemperature: number; gpuTemperature: number; pumpRpm?: number; capturedAt: string };
 type TransitIncident = { line: string; detail: string; updatedAt: string; frequency?: number };
 type Transit = { status: "ready" | "pending" | "error"; fetchedAt?: string; message?: string; incidents: TransitIncident[] };
@@ -104,7 +105,7 @@ export default function Home() {
       <nav>{([['hourly', '1時間ごと'], ['today', '今日・明日'], ['days', '今日〜3日後']] as const).map(([key, label]) => <button className={tab === key ? "active" : ""} onClick={() => setTab(key)} key={key}>{label}</button>)}</nav>
       <div className="cards">{places.map(place => <article key={place.name}><div className="cardhead"><div><small>{place.name}</small><h3>{place.summary}</h3></div><b>☀</b></div>
         {tab === "hourly" && <div className="hourly">{place.hourly.map(value => <div key={value[0]}><small>{value[0]}</small><b>{value[1]}</b><strong>{value[2]}</strong><span>☔ {value[3]}</span></div>)}</div>}
-        {tab === "today" && <div className="today"><div>最高 <b>{place.high}℃</b><br />最低 <i>{place.low}℃</i></div><div><small>降水確率</small><p>午前 <strong>取得中</strong></p><p>午後 <strong>取得中</strong></p></div></div>}
+        {tab === "today" && <div className="today">{(place.todayTomorrow ?? []).map(day => <div className="today-day" key={day.key}><small>{day.key === "today" ? "今日" : "明日"} {day.emoji}</small><div>最高 <b>{day.high}℃</b><br />最低 <i>{day.low}℃</i></div><div><small>降水確率</small><p>午前 <strong>{day.morning}%</strong></p><p>午後 <strong>{day.afternoon}%</strong></p></div></div>)}</div>}
         {tab === "days" && <div className="days">{(place.days ?? []).map(value => <div key={value[0]}><small>{value[0]}</small><b>{value[1]}</b><strong>{value[2]} <i>{value[3]}</i></strong><span>☔ {value[4]}</span></div>)}</div>}
       </article>)}</div>
     </section>
