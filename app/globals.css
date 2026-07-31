@@ -1,4 +1,5 @@
 @import "tailwindcss";
+.temperature .temperature-card.safe{border-color:#22a66f}.temperature .temperature-card.safe strong{color:#168451}.temperature .temperature-card.caution{border-color:#ef9f35}.temperature .temperature-card.caution strong{color:#d87910}.temperature .temperature-card.danger{border-color:#e86053}.temperature .temperature-card.danger strong{color:#d94235}
 .temperature-cards.two-columns{grid-template-columns:repeat(2,1fr)}
 .hourly{min-height:154px;align-items:stretch}.hourly>div{height:146px}
 main .transit{background:var(--surface);color:var(--ink);border:1px solid var(--line)}main .transit h2{color:var(--ink)}main .transithead>div>span,main .transit>small{color:var(--muted)}main .transit aside{background:var(--sky);color:var(--ink)}main .transit aside small{color:var(--muted)}main .list>div{background:var(--sky);border-color:var(--line)}main .list p{color:var(--ink)}main .list p span{color:var(--muted)}

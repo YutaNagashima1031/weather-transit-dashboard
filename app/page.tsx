@@ -20,8 +20,9 @@ function jst(value: string) {
 
 function temperatureState(value: number) {
   if (value >= 90) return "danger";
-  if (value >= 80) return "caution";
-  return "good";
+  if (value >= 75) return "caution";
+  if (value >= 60) return "safe";
+  return "normal";
 }
 
 export default function Home() {
