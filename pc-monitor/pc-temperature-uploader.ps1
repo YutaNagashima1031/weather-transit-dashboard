@@ -4,7 +4,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 if (-not (Test-Path -LiteralPath $ConfigPath)) {
-  throw "config.json がありません。config.example.json をコピーして、トークンを設定してください。"
+  throw "config.json is missing. Copy config.example.json to config.json first."
 }
 $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 
@@ -25,7 +25,7 @@ function Get-Number($value) {
 
 function Find-Temperature($sensors, [string[]]$names) {
   foreach ($name in $names) {
-    $sensor = $sensors | Where-Object { $_.Text -like "*$name*" -and $_.Value -match '°C' } | Select-Object -First 1
+    $sensor = $sensors | Where-Object { $_.Text -like "*$name*" -and $_.Value -match 'C' } | Select-Object -First 1
     if ($sensor) { return Get-Number $sensor.Value }
   }
   return $null
@@ -35,15 +35,17 @@ while ($true) {
   try {
     $tree = Invoke-RestMethod -Uri $config.sensorUrl -TimeoutSec 10
     $sensors = Get-AllSensors $tree
-    $cpu = Find-Temperature $sensors @("CPU Package", "CPU CCD", "CPU Core")
-    $gpu = Find-Temperature $sensors @("GPU Core", "GPU Temperature")
-    $pumpSensor = $sensors | Where-Object { $_.Text -match 'Pump|ポンプ' -and $_.Value -match 'RPM' } | Select-Object -First 1
+    $cpuNames = @("CPU Package", "Core (Tctl/Tdie)", "CCDs Max (Tdie)", "CPU CCD", "CPU Core")
+    $gpuNames = @("GPU Core", "GPU Temperature")
+    $cpu = Find-Temperature -sensors $sensors -names $cpuNames
+    $gpu = Find-Temperature -sensors $sensors -names $gpuNames
+    $pumpSensor = $sensors | Where-Object { $_.Text -match 'Pump' -and $_.Value -match 'RPM' } | Select-Object -First 1
     $pump = if ($pumpSensor) { Get-Number $pumpSensor.Value } else { $null }
-    if ($null -eq $cpu -or $null -eq $gpu) { throw "CPU または GPU の温度センサーを見つけられません。Libre Hardware Monitor の data.json を確認してください。" }
+    if ($null -eq $cpu -or $null -eq $gpu) { throw "CPU or GPU temperature sensor was not found." }
     $payload = @{ cpuTemperature = $cpu; gpuTemperature = $gpu; capturedAt = (Get-Date).ToUniversalTime().ToString("o") }
     if ($null -ne $pump) { $payload.pumpRpm = $pump }
     Invoke-RestMethod -Method Post -Uri "$($config.workerUrl.TrimEnd('/'))/api/pc-temperature" -Headers @{ Authorization = "Bearer $($config.token)" } -ContentType "application/json" -Body ($payload | ConvertTo-Json -Compress) | Out-Null
-    Write-Host "$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss') 温度を送信しました: CPU $cpu ℃ / GPU $gpu ℃"
+    Write-Host "$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss') Uploaded: CPU $cpu C / GPU $gpu C"
   } catch {
     Write-Warning $_.Exception.Message
   }
