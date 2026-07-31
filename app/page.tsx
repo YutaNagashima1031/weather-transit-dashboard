@@ -7,11 +7,21 @@ type Place = { name: string; summary: string; now: string; high: number; low: nu
 type Temperature = { cpuTemperature: number; gpuTemperature: number; cpuName?: string; gpuName?: string; capturedAt: string };
 type TransitIncident = { line: string; detail: string; updatedAt: string; frequency?: number };
 type Transit = { status: "ready" | "pending" | "error"; fetchedAt?: string; message?: string; incidents: TransitIncident[] };
+type NewsTopic = "politics" | "domestic" | "it" | "investment";
+type NewsItem = { title: string; url: string; source: string; publishedAt: string };
+type News = { status: "ready" | "error"; fetchedAt?: string; topics: Partial<Record<NewsTopic, NewsItem[]>> };
 type Tab = "hourly" | "today" | "days";
 
 const fallbackPlaces: Place[] = [
   { name: "埼玉県川口市", summary: "読み込み中", now: "--℃", high: 0, low: 0, hourly: [] },
   { name: "東京都台東区", summary: "読み込み中", now: "--℃", high: 0, low: 0, hourly: [] },
+];
+
+const NEWS_TABS: Array<{ key: NewsTopic; label: string }> = [
+  { key: "politics", label: "日本政治" },
+  { key: "domestic", label: "国内・天気" },
+  { key: "it", label: "IT" },
+  { key: "investment", label: "投資信託・指数" },
 ];
 
 function jst(value: string) {
@@ -39,6 +49,15 @@ export default function Home() {
   const [temperature, setTemperature] = useState<Temperature | null>(null);
   const [temperatureStatus, setTemperatureStatus] = useState("PC監視ツールの接続待ち");
   const [transit, setTransit] = useState<Transit>({ status: "pending", incidents: [], message: "運行情報を確認中です" });
+
+  const [newsTab, setNewsTab] = useState<NewsTopic>("politics");
+  const [news, setNews] = useState<News>({ status: "ready", topics: {} });
+
+  const updateNews = async () => {
+    const response = await fetch("/api/news", { cache: "no-store" });
+    if (!response.ok) throw new Error("news");
+    setNews(await response.json() as News);
+  };
 
   const updateWeather = async () => {
     const response = await fetch("/api/weather");
@@ -76,6 +95,7 @@ export default function Home() {
   };
 
   useEffect(() => {
+    updateNews().catch(() => setNews({ status: "error", topics: {} }));
     updateWeather().catch(() => setUpdated("天気情報を取得できません"));
     updateTemperature();
     updateTransit();
@@ -106,6 +126,12 @@ export default function Home() {
     </header>
 
     <section id="top" className="hero wrap"><div><p>WEATHER & TRANSIT / TOKYO AREA</p><h1>今日の移動を、<br /><em>ひと目で。</em></h1><span>埼玉県川口市・東京都台東区の天気と、首都圏の運行情報をまとめて確認できます。</span></div><aside><b>☀</b><div><small>現在の東京エリア</small><strong>天気と運行情報</strong><span>更新ボタンで最新情報を取得</span></div></aside></section>
+
+    <section className="news wrap"><div className="news-title"><div><p>NEWS TOPICS</p><h2>主要ニュース</h2></div><small>ニュース更新: {news.fetchedAt ? jst(news.fetchedAt) : "読み込み中"}</small></div>
+      <nav>{NEWS_TABS.map(topic => <button className={newsTab === topic.key ? "active" : ""} onClick={() => setNewsTab(topic.key)} key={topic.key}>{topic.label}</button>)}</nav>
+      <div className="news-list">{(news.topics[newsTab] ?? []).map(item => <a href={item.url} target="_blank" rel="noreferrer" key={item.url}><span>{item.title}</span><small>{item.source}</small></a>)}{news.status === "error" && <p>ニュース情報を取得できません。</p>}{news.status === "ready" && (news.topics[newsTab] ?? []).length === 0 && <p>ニュースを読み込み中です。</p>}</div>
+      <small className="news-schedule">更新予定: 毎日 6:00 / 12:00 / 16:00 / 20:00</small>
+    </section>
 
     <section className="weather wrap"><div className="title"><div><p>WEATHER FORECAST</p><h2>2地点の天気予報</h2></div><small>取得日時: {updated || "読み込み中"}</small></div>
       <nav>{([['hourly', '1時間ごと'], ['today', '今日・明日'], ['days', '今日〜3日後']] as const).map(([key, label]) => <button className={tab === key ? "active" : ""} onClick={() => setTab(key)} key={key}>{label}</button>)}</nav>

@@ -3,6 +3,9 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-07-30",
   "keep_vars": true,
+  "triggers": {
+    "crons": ["0 21 * * *", "0 3 * * *", "0 7 * * *", "0 11 * * *"]
+  },
   "kv_namespaces": [
     {
       "binding": "TEMPERATURE_CACHE",

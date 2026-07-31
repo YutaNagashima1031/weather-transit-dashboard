@@ -151,6 +151,65 @@ async function getTransitInformation(token: string) {
   return { status: "ready", fetchedAt: new Date().toISOString(), incidents };
 }
 
+type NewsTopic = "politics" | "domestic" | "it" | "investment";
+type NewsItem = { title: string; url: string; source: string; publishedAt: string };
+type NewsPayload = { status: "ready" | "error"; fetchedAt: string; topics: Record<NewsTopic, NewsItem[]> };
+
+const NEWS_TOPICS: Array<{ key: NewsTopic; label: string; query: string }> = [
+  { key: "politics", label: "日本政治", query: "日本 政治" },
+  { key: "domestic", label: "国内・天気", query: "日本 国内 天気 防災" },
+  { key: "it", label: "IT", query: "IT システムエンジニア" },
+  { key: "investment", label: "インデックス投資", query: "インデックス投資 投資信託 -FX -為替 -個別株" },
+];
+
+function decodeXml(value: string) {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replaceAll("&amp;", "&")
+    .replaceAll("&quot;", "\"")
+    .replaceAll("&#39;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .trim();
+}
+
+function rssTag(item: string, tag: string) {
+  const matched = item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
+  return matched ? decodeXml(matched[1]) : "";
+}
+
+function toNewsItems(xml: string) {
+  return (xml.match(/<item>[\s\S]*?<\/item>/gi) ?? []).slice(0, 6).map((item) => {
+    const rawTitle = rssTag(item, "title");
+    const parts = rawTitle.split(" - ");
+    const source = parts.length > 1 ? parts.pop()! : "ニュース";
+    return {
+      title: parts.join(" - ") || rawTitle,
+      source,
+      url: rssTag(item, "link"),
+      publishedAt: rssTag(item, "pubDate"),
+    };
+  }).filter((item) => item.title && item.url);
+}
+
+async function getNews(): Promise<NewsPayload> {
+  const entries = await Promise.all(NEWS_TOPICS.map(async (topic) => {
+    const params = new URLSearchParams({ q: topic.query, hl: "ja", gl: "JP", ceid: "JP:ja" });
+    const response = await fetch(`https://news.google.com/rss/search?${params}`, {
+      headers: { "User-Agent": "weather-transit-dashboard/1.0" },
+    });
+    if (!response.ok) throw new Error(`news_${topic.key}`);
+    return [topic.key, toNewsItems(await response.text())] as const;
+  }));
+  return { status: "ready", fetchedAt: new Date().toISOString(), topics: Object.fromEntries(entries) as Record<NewsTopic, NewsItem[]> };
+}
+
+async function refreshNewsCache(env: Env) {
+  const news = await getNews();
+  if (env.TEMPERATURE_CACHE) await env.TEMPERATURE_CACHE.put("news:latest", JSON.stringify(news));
+  return news;
+}
+
 // Image security config. SVG sources with .svg extension auto-skip the
 // optimization endpoint on the client side (served directly, no proxy).
 // To route SVGs through the optimizer (with security headers), set
@@ -222,6 +281,15 @@ const worker = {
       }
     }
 
+    if (url.pathname === "/api/news") {
+      try {
+        const cached = env.TEMPERATURE_CACHE ? await env.TEMPERATURE_CACHE.get<NewsPayload>("news:latest", "json") : null;
+        return json(cached ?? await refreshNewsCache(env));
+      } catch {
+        return json({ status: "error", fetchedAt: new Date().toISOString(), topics: {} }, 502);
+      }
+    }
+
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
       return handleImageOptimization(request, {
@@ -234,6 +302,9 @@ const worker = {
     }
 
     return handler.fetch(request, env, ctx);
+  },
+  async scheduled(_controller: unknown, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(refreshNewsCache(env).catch(() => undefined));
   },
 };
 
