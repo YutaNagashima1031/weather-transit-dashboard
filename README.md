@@ -45,7 +45,7 @@ PCからの温度送信は専用シークレットで認証します。シーク
 
 ## PC温度監視の設定
 
-詳細は [pc-monitor/README.md](pc-monitor/README.md) を参照してください。PC側の設定値を含む `config.json` はGitHubに公開しないでください。
+詳細は [pc-monitor/README.md](pc-monitor/README.md) を参照してください。Libre Hardware Monitorを起動し、Remote Web Serverを有効化したうえで、送信ツールを設定します。温度が表示されない場合は、Libre Hardware Monitorの起動状態・Remote Web Server・`config.json` の接続先を確認してください。PC側の設定値を含む `config.json` はGitHubに公開しないでください。
 
 ## ローカル起動
 

@@ -11,6 +11,14 @@
 
 `config.json` はトークンを含むためGitHubへ登録しません。
 
+## 表示されない場合の確認
+
+- Libre Hardware Monitorが起動しているか確認します。
+- `Options` → `Remote Web Server` の `Run` が有効であることを確認します。
+- ブラウザで `config.json` の `sensorUrl` を開き、JSON形式のセンサー情報が表示されることを確認します。
+- `config.json` の `workerUrl`、`token`、`sensorUrl` が正しいか確認します。
+- CPU/GPU名はLibre Hardware Monitorが認識した製品名を送信します。送信ツールの更新後は、Windows再起動または送信ツールの再起動で反映されます。
+
 ## Windows起動時に自動で監視する
 
 1. Libre Hardware Monitorの `Options` → `Run On Windows Startup` を有効にします。

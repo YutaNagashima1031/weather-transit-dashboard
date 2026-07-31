@@ -25,6 +25,8 @@ interface ExecutionContext {
 type TemperaturePayload = {
   cpuTemperature: number;
   gpuTemperature: number;
+  cpuName?: string;
+  gpuName?: string;
   pumpRpm?: number;
   capturedAt: string;
 };
@@ -184,6 +186,8 @@ const worker = {
         const normalized: TemperaturePayload = {
           cpuTemperature: Math.round(payload.cpuTemperature * 10) / 10,
           gpuTemperature: Math.round(payload.gpuTemperature * 10) / 10,
+          ...(typeof payload.cpuName === "string" ? { cpuName: payload.cpuName.slice(0, 120) } : {}),
+          ...(typeof payload.gpuName === "string" ? { gpuName: payload.gpuName.slice(0, 120) } : {}),
           ...(typeof payload.pumpRpm === "number" && Number.isFinite(payload.pumpRpm) ? { pumpRpm: Math.round(payload.pumpRpm) } : {}),
           capturedAt: payload.capturedAt,
         };

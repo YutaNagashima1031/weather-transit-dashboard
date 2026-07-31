@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 type TodayForecast = { key: "today" | "tomorrow"; emoji: string; high: number; low: number; morning: number; afternoon: number };
 type Place = { name: string; summary: string; now: string; high: number; low: number; hourly: string[][]; days?: string[][]; todayTomorrow?: TodayForecast[] };
-type Temperature = { cpuTemperature: number; gpuTemperature: number; pumpRpm?: number; capturedAt: string };
+type Temperature = { cpuTemperature: number; gpuTemperature: number; cpuName?: string; gpuName?: string; capturedAt: string };
 type TransitIncident = { line: string; detail: string; updatedAt: string; frequency?: number };
 type Transit = { status: "ready" | "pending" | "error"; fetchedAt?: string; message?: string; incidents: TransitIncident[] };
 type Tab = "hourly" | "today" | "days";
@@ -111,8 +111,8 @@ export default function Home() {
     </section>
 
     <section className="temperature wrap"><div className="temperature-head"><div><p>PC TEMPERATURE MONITOR</p><h2>このPCの温度監視</h2><span>{temperatureStatus}・PC側は1分ごとに常時送信します。</span></div><span className="live"><i /> LIVE</span></div>
-      <div className="temperature-cards"><div className={`temperature-card ${temperature ? temperatureState(temperature.cpuTemperature) : ""}`}><small>CPU 温度</small><strong>{temperature ? `${temperature.cpuTemperature}℃` : "--℃"}</strong><span>パッケージ温度</span></div><div className={`temperature-card ${temperature ? temperatureState(temperature.gpuTemperature) : ""}`}><small>GPU 温度</small><strong>{temperature ? `${temperature.gpuTemperature}℃` : "--℃"}</strong><span>GPUコア温度</span></div><div className="temperature-card"><small>ポンプ回転数</small><strong>{temperature?.pumpRpm ? `${temperature.pumpRpm} RPM` : "-- RPM"}</strong><span>取得できる機器のみ表示</span></div></div>
-      <small className="temperature-note">注意: この表示は補助監視です。BIOS/UEFIの過熱時シャットダウン設定も有効にしてください。</small>
+      <div className="temperature-cards two-columns"><div className={`temperature-card ${temperature ? temperatureState(temperature.cpuTemperature) : ""}`}><small>CPU 温度</small><strong>{temperature ? `${temperature.cpuTemperature}℃` : "--℃"}</strong><span>{temperature?.cpuName || "CPU名を取得中"}</span></div><div className={`temperature-card ${temperature ? temperatureState(temperature.gpuTemperature) : ""}`}><small>GPU 温度</small><strong>{temperature ? `${temperature.gpuTemperature}℃` : "--℃"}</strong><span>{temperature?.gpuName || "GPU名を取得中"}</span></div></div>
+      <small className="temperature-note">温度情報が表示されない場合は、Libre Hardware Monitorが起動しているか、Remote Web Serverと送信ツールの設定を見直してください。表示は補助監視のため、BIOS/UEFIの過熱時シャットダウン設定も有効にしてください。</small>
     </section>
 
     <section className="transit wrap"><div className="transithead"><div><p>TRAIN STATUS</p><h2>首都圏の運行情報</h2><span>東京メトロ全線と対象JR路線のうち、遅延・事故・運転見合わせ・直通運転中止のみを表示します。</span></div>{(transit.status !== "ready" || transit.incidents.length > 0) && <aside><b>!</b><strong>{transit.status === "ready" ? transit.incidents.length : "…"}</strong><small>{transit.status === "ready" ? "対象の障害路線" : "情報を確認中"}</small></aside>}</div><div className="list">{transit.status === "ready" && transit.incidents.length === 0 ? <div className="normal-status"><i /><p><b>現在、対象の障害情報はありません</b><span>首都圏の対象路線は通常どおり運行しています。</span></p><em>正常</em></div> : transit.incidents.map(item => <div key={`${item.line}-${item.updatedAt}`}><i /><p><b>{item.line}</b><span>{item.detail}</span></p><em>運行情報</em></div>)}{transit.status !== "ready" && <div><i /><p><b>{transit.message || "運行情報を確認中です"}</b><span>更新ボタンで天気と同時に再取得できます。</span></p><em>確認中</em></div>}</div><small>運行情報取得日時: {transit.fetchedAt ? jst(transit.fetchedAt) : "確認中"}</small></section>
