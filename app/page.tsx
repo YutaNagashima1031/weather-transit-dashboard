@@ -25,6 +25,11 @@ function temperatureState(value: number) {
   return "normal";
 }
 
+function hasRainToday(place: Place) {
+  const today = place.todayTomorrow?.find(day => day.key === "today");
+  return Boolean(today && (today.morning > 0 || today.afternoon > 0));
+}
+
 export default function Home() {
   const [tab, setTab] = useState<Tab>("hourly");
   const [dark, setDark] = useState(false);
@@ -105,6 +110,7 @@ export default function Home() {
     <section className="weather wrap"><div className="title"><div><p>WEATHER FORECAST</p><h2>2地点の天気予報</h2></div><small>取得日時: {updated || "読み込み中"}</small></div>
       <nav>{([['hourly', '1時間ごと'], ['today', '今日・明日'], ['days', '今日〜3日後']] as const).map(([key, label]) => <button className={tab === key ? "active" : ""} onClick={() => setTab(key)} key={key}>{label}</button>)}</nav>
       <div className="cards">{places.map(place => <article key={place.name}><div className="cardhead"><div><small>{place.name}</small><h3>{place.summary}</h3></div><b>☀</b></div>
+        {hasRainToday(place) && <p className="umbrella-notice">本日は降水確率があります。傘をお持ちください。</p>}
         {tab === "hourly" && <div className="hourly">{place.hourly.map(value => <div key={value[0]}><small>{value[0]}</small><b>{value[1]}</b><strong>{value[2]}</strong>{Number.parseFloat(value[3]) > 0 && <span>☔ {value[3]}</span>}</div>)}</div>}
         {tab === "today" && <div className="today">{(place.todayTomorrow ?? []).map(day => <div className="today-day" key={day.key}><small>{day.key === "today" ? "今日" : "明日"} {day.emoji}</small><div>最高 <b>{day.high}℃</b><br />最低 <i>{day.low}℃</i></div><div><small>降水確率</small><p>午前 <strong>{day.morning}%</strong></p><p>午後 <strong>{day.afternoon}%</strong></p></div></div>)}</div>}
         {tab === "days" && <div className="days">{(place.days ?? []).map(value => <div key={value[0]}><small>{value[0]}</small><b>{value[1]}</b><strong>{value[2]} <i>{value[3]}</i></strong><span>☔ {value[4]}</span></div>)}</div>}

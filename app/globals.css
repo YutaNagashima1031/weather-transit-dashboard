@@ -1,4 +1,5 @@
 @import "tailwindcss";
+.umbrella-notice{margin:10px 0 0;padding:7px 10px;border-radius:9px;background:#fff2a8;color:#c42d1d;font-size:12px;font-weight:bold;line-height:1.45}
 .temperature .temperature-card.safe{border-color:#22a66f}.temperature .temperature-card.safe strong{color:#168451}.temperature .temperature-card.caution{border-color:#ef9f35}.temperature .temperature-card.caution strong{color:#d87910}.temperature .temperature-card.danger{border-color:#e86053}.temperature .temperature-card.danger strong{color:#d94235}
 .temperature-cards.two-columns{grid-template-columns:repeat(2,1fr)}
 .hourly{min-height:154px;align-items:stretch}.hourly>div{height:146px}
