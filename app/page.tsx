@@ -1,22 +1,106 @@
 "use client";
+
 import { useEffect, useState } from "react";
 
 type Place = { name: string; summary: string; now: string; high: number; low: number; hourly: string[][]; days?: string[][] };
-const fallbackPlaces: Place[] = [
-  { name: "埼玉県川口市", summary: "晴れ時々くもり", now: "28°", high: 32, low: 24, hourly: [["いま","☀️","28°","0mm"],["13時","🌤️","30°","0mm"],["14時","🌤️","31°","0mm"],["15時","☀️","32°","0mm"],["16時","🌤️","31°","0mm"],["17時","☁️","30°","0mm"],["18時","☁️","29°","0mm"],["19時","☁️","28°","0mm"],["20時","☁️","27°","0mm"],["21時","🌙","27°","0mm"],["22時","🌙","26°","0mm"],["23時","🌙","26°","0mm"]] },
-  { name: "東京都台東区", summary: "晴れのちくもり", now: "27°", high: 31, low: 25, hourly: [["いま","☀️","27°","0mm"],["13時","☀️","29°","0mm"],["14時","🌤️","30°","0mm"],["15時","🌤️","31°","0mm"],["16時","🌤️","31°","0mm"],["17時","☁️","30°","0mm"],["18時","☁️","29°","0mm"],["19時","☁️","28°","0mm"],["20時","☁️","27°","0mm"],["21時","🌙","27°","0mm"],["22時","🌙","26°","0mm"],["23時","🌙","26°","0mm"]] }
-];
-const days = [["今日","☀️","32°","24°","10%"],["明日","🌤️","33°","25°","20%"],["明後日","🌦️","31°","25°","50%"],["3日後","🌤️","32°","24°","20%"]];
-const incidents = [["JR宇都宮線","遅延","一部列車に遅れが出ています"],["東京メトロ東西線","直通運転中止","JR線との直通運転を中止しています"]];
+type Temperature = { cpuTemperature: number; gpuTemperature: number; pumpRpm?: number; capturedAt: string };
 type Tab = "hourly" | "today" | "days";
+
+const fallbackPlaces: Place[] = [
+  { name: "埼玉県川口市", summary: "読み込み中", now: "--℃", high: 0, low: 0, hourly: [] },
+  { name: "東京都台東区", summary: "読み込み中", now: "--℃", high: 0, low: 0, hourly: [] },
+];
+
+function jst(value: string) {
+  return new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function temperatureState(value: number) {
+  if (value >= 90) return "danger";
+  if (value >= 80) return "caution";
+  return "good";
+}
+
 export default function Home() {
- const [tab,setTab]=useState<Tab>("hourly"),[dark,setDark]=useState(false),[updating,setUpdating]=useState(false),[updated,setUpdated]=useState(""),[places,setPlaces]=useState<Place[]>(fallbackPlaces);
- const updateWeather=async()=>{const response=await fetch("/api/weather");if(!response.ok)throw new Error("weather");const data=await response.json() as {places:Place[];fetchedAt:string};setPlaces(data.places);setUpdated(new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date(data.fetchedAt)))};
- useEffect(()=>{const next=()=>setUpdated(new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date()));next();updateWeather().catch(()=>{});const saved=localStorage.getItem("theme");setDark(saved? saved==="dark":matchMedia("(prefers-color-scheme:dark)").matches)},[]);
- useEffect(()=>{document.documentElement.dataset.theme=dark?"dark":"light";localStorage.setItem("theme",dark?"dark":"light")},[dark]);
- const refresh=async()=>{setUpdating(true);try{await updateWeather()}catch{setUpdated("取得に失敗しました")}finally{setUpdating(false)}};
- return <main><header className="bar wrap"><a className="brand" href="#top"><b>☀</b>首都圏 <strong>天気・運行情報</strong></a><div className="actions"><small><i/> 最終更新 {updated||"読込中"}</small><button className="refresh" disabled={updating} onClick={refresh}>↻ {updating?"更新中…":"情報を更新"}</button><button onClick={()=>setDark(!dark)}>{dark?"☀ ライト":"☾ ダーク"}</button></div></header>
- <section id="top" className="hero wrap"><div><p>WEATHER & TRANSIT / TOKYO AREA</p><h1>今日の空模様と、<br/><em>いつもの移動</em>をひと目で。</h1><span>川口市・台東区の天気と、首都圏の気になる運行情報をまとめてお届けします。</span></div><aside><b>☀️</b><div><small>きょうの東京エリア</small><strong>夏空、広がる。</strong><span>最高 32° / 最低 24°</span></div></aside></section>
- <section className="weather wrap"><div className="title"><div><p>WEATHER FORECAST</p><h2>2地域の天気予報</h2></div><small>気象データ取得日時：{updated}</small></div><nav>{([['hourly','1時間ごと'],['today','今日・明日'],['days','今日〜3日後']] as const).map(([k,t])=><button className={tab===k?'active':''} onClick={()=>setTab(k)} key={k}>{t}</button>)}</nav><div className="cards">{places.map(place=><article key={place.name}><div className="cardhead"><div><small>{place.name}</small><h3>{place.summary}</h3></div><b>☀️</b></div>{tab==='hourly'&&<div className="hourly">{place.hourly.map(x=><div key={x[0]}><small>{x[0]}</small><b>{x[1]}</b><strong>{x[2]}</strong><span>☔ {x[3]}</span></div>)}</div>}{tab==='today'&&<div className="today"><div>最高 <b>{place.high}°</b><br/>最低 <i>{place.low}°</i></div><div><small>降水確率</small><p>午前　<strong>10%</strong></p><p>午後　<strong>20%</strong></p></div></div>}{tab==='days'&&<div className="days">{days.map(d=><div key={d[0]}><small>{d[0]}</small><b>{d[1]}</b><strong>{d[2]} <i>{d[3]}</i></strong><span>☔ {d[4]}</span></div>)}</div>}</article>)}</div></section>
- <section className="transit wrap"><div className="transithead"><div><p>TRAIN STATUS</p><h2>首都圏の運行情報</h2><span>東京・埼玉・栃木のJR線、東京メトロ全線から、遅延・事故などがある路線のみを表示しています。</span></div><aside><b>!</b><strong>2</strong><small>路線でお知らせ</small></aside></div><div className="list">{incidents.map(x=><div key={x[0]}><i/><p><b>{x[0]}</b><span>{x[2]}</span></p><em>{x[1]}</em></div>)}</div><small>運行情報取得日時：{updated}　情報提供：公共交通オープンデータセンター（接続設定後に反映予定）</small></section><footer className="wrap">首都圏 天気・運行情報 <span>表示時刻は日本時間（JST）です</span></footer></main>
+  const [tab, setTab] = useState<Tab>("hourly");
+  const [dark, setDark] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [updated, setUpdated] = useState("");
+  const [places, setPlaces] = useState<Place[]>(fallbackPlaces);
+  const [temperature, setTemperature] = useState<Temperature | null>(null);
+  const [temperatureStatus, setTemperatureStatus] = useState("PC監視ツールの接続待ち");
+
+  const updateWeather = async () => {
+    const response = await fetch("/api/weather");
+    if (!response.ok) throw new Error("weather");
+    const data = await response.json() as { places: Place[]; fetchedAt: string };
+    setPlaces(data.places);
+    setUpdated(jst(data.fetchedAt));
+  };
+
+  const updateTemperature = async () => {
+    try {
+      const response = await fetch("/api/pc-temperature", { cache: "no-store" });
+      const data = await response.json() as { status: string; latest?: Temperature; message?: string };
+      if (data.status === "ready" && data.latest) {
+        setTemperature(data.latest);
+        setTemperatureStatus(`PCから ${jst(data.latest.capturedAt)} に取得`);
+      } else if (data.status === "setup_required") {
+        setTemperatureStatus("初回設定待ち");
+      } else {
+        setTemperatureStatus("PC監視ツールの接続待ち");
+      }
+    } catch {
+      setTemperatureStatus("温度情報を確認できません");
+    }
+  };
+
+  useEffect(() => {
+    updateWeather().catch(() => setUpdated("天気情報を取得できません"));
+    updateTemperature();
+    const temperatureTimer = window.setInterval(updateTemperature, 60_000);
+    const saved = localStorage.getItem("theme");
+    setDark(saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches);
+    return () => window.clearInterval(temperatureTimer);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    localStorage.setItem("theme", dark ? "dark" : "light");
+  }, [dark]);
+
+  const refresh = async () => {
+    setUpdating(true);
+    try {
+      await Promise.all([updateWeather(), updateTemperature()]);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return <main>
+    <header className="bar wrap">
+      <a className="brand" href="#top"><b>☀</b>首都圏 <strong>天気・運行情報</strong></a>
+      <div className="actions"><small><i /> 最終更新 {updated || "読み込み中"}</small><button className="refresh" disabled={updating} onClick={refresh}>↻ {updating ? "更新中…" : "情報を更新"}</button><button onClick={() => setDark(!dark)}>{dark ? "☀ ライト" : "◐ ダーク"}</button></div>
+    </header>
+
+    <section id="top" className="hero wrap"><div><p>WEATHER & TRANSIT / TOKYO AREA</p><h1>今日の移動を、<br /><em>ひと目で。</em></h1><span>埼玉県川口市・東京都台東区の天気と、首都圏の運行情報をまとめて確認できます。</span></div><aside><b>☀</b><div><small>現在の東京エリア</small><strong>天気と運行情報</strong><span>更新ボタンで最新情報を取得</span></div></aside></section>
+
+    <section className="weather wrap"><div className="title"><div><p>WEATHER FORECAST</p><h2>2地点の天気予報</h2></div><small>取得日時: {updated || "読み込み中"}</small></div>
+      <nav>{([['hourly', '1時間ごと'], ['today', '今日・明日'], ['days', '今日〜3日後']] as const).map(([key, label]) => <button className={tab === key ? "active" : ""} onClick={() => setTab(key)} key={key}>{label}</button>)}</nav>
+      <div className="cards">{places.map(place => <article key={place.name}><div className="cardhead"><div><small>{place.name}</small><h3>{place.summary}</h3></div><b>☀</b></div>
+        {tab === "hourly" && <div className="hourly">{place.hourly.map(value => <div key={value[0]}><small>{value[0]}</small><b>{value[1]}</b><strong>{value[2]}</strong><span>☔ {value[3]}</span></div>)}</div>}
+        {tab === "today" && <div className="today"><div>最高 <b>{place.high}℃</b><br />最低 <i>{place.low}℃</i></div><div><small>降水確率</small><p>午前 <strong>取得中</strong></p><p>午後 <strong>取得中</strong></p></div></div>}
+        {tab === "days" && <div className="days">{(place.days ?? []).map(value => <div key={value[0]}><small>{value[0]}</small><b>{value[1]}</b><strong>{value[2]} <i>{value[3]}</i></strong><span>☔ {value[4]}</span></div>)}</div>}
+      </article>)}</div>
+    </section>
+
+    <section className="temperature wrap"><div className="temperature-head"><div><p>PC TEMPERATURE MONITOR</p><h2>このPCの温度監視</h2><span>{temperatureStatus}・PC側は1分ごとに常時送信します。</span></div><span className="live"><i /> LIVE</span></div>
+      <div className="temperature-cards"><div className={`temperature-card ${temperature ? temperatureState(temperature.cpuTemperature) : ""}`}><small>CPU 温度</small><strong>{temperature ? `${temperature.cpuTemperature}℃` : "--℃"}</strong><span>パッケージ温度</span></div><div className={`temperature-card ${temperature ? temperatureState(temperature.gpuTemperature) : ""}`}><small>GPU 温度</small><strong>{temperature ? `${temperature.gpuTemperature}℃` : "--℃"}</strong><span>GPUコア温度</span></div><div className="temperature-card"><small>ポンプ回転数</small><strong>{temperature?.pumpRpm ? `${temperature.pumpRpm} RPM` : "-- RPM"}</strong><span>取得できる機器のみ表示</span></div></div>
+      <small className="temperature-note">注意: この表示は補助監視です。BIOS/UEFIの過熱時シャットダウン設定も有効にしてください。</small>
+    </section>
+
+    <section className="transit wrap"><div className="transithead"><div><p>TRAIN STATUS</p><h2>首都圏の運行情報</h2><span>東京メトロ全線と対象JR路線のうち、遅延・事故・運転見合わせ・直通運転中止のみを表示します。</span></div><aside><b>!</b><strong>確認中</strong><small>ODPTの情報を利用</small></aside></div><div className="list"><div><i /><p><b>運行情報を確認中です</b><span>設定完了後、該当する路線だけがここに表示されます。</span></p><em>確認中</em></div></div><small>運行情報は更新ボタンで天気と同時に取得します。</small></section>
+    <footer className="wrap">首都圏 天気・運行情報 <span>表示時刻は日本時間です</span></footer>
+  </main>;
 }

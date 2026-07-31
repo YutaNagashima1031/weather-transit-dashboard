@@ -5,6 +5,8 @@ import handler from "vinext/server/app-router-entry";
 interface Env {
   ASSETS: Fetcher;
   ODPT_API_TOKEN?: string;
+  PC_MONITOR_TOKEN?: string;
+  TEMPERATURE_CACHE?: KVNamespace;
   DB: D1Database;
   IMAGES: {
     input(stream: ReadableStream): {
@@ -18,6 +20,27 @@ interface Env {
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
+}
+
+type TemperaturePayload = {
+  cpuTemperature: number;
+  gpuTemperature: number;
+  pumpRpm?: number;
+  capturedAt: string;
+};
+
+const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
+
+function json(data: unknown, status = 200) {
+  return Response.json(data, { status, headers: JSON_HEADERS });
+}
+
+function isTemperaturePayload(value: unknown): value is TemperaturePayload {
+  if (!value || typeof value !== "object") return false;
+  const data = value as Record<string, unknown>;
+  return typeof data.cpuTemperature === "number" && Number.isFinite(data.cpuTemperature)
+    && typeof data.gpuTemperature === "number" && Number.isFinite(data.gpuTemperature)
+    && typeof data.capturedAt === "string" && !Number.isNaN(Date.parse(data.capturedAt));
 }
 
 const WEATHER_LOCATIONS = [
@@ -82,6 +105,34 @@ async function getWeather() {
   };
 }
 
+const DISRUPTION_PATTERN = /遅延|事故|運転見合わせ|直通運転中止/;
+
+function routeName(value: unknown) {
+  const id = String(value ?? "").split(".").pop() ?? "対象路線";
+  return id.replaceAll("-", " ");
+}
+
+async function getTransitInformation(token: string) {
+  const operators = ["odpt.Operator:JR-East", "odpt.Operator:TokyoMetro"];
+  const responses = await Promise.all(operators.map(async (operator) => {
+    const query = new URLSearchParams({ "odpt:operator": operator, "acl:consumerKey": token });
+    const response = await fetch(`https://api.odpt.org/api/v4/odpt:TrainInformation?${query}`);
+    if (!response.ok) throw new Error("ODPTの運行情報を取得できませんでした。");
+    return response.json() as Promise<Array<Record<string, unknown>>>;
+  }));
+  const items = responses.flat();
+  const incidents = items.map((item) => {
+    const text = String(item["odpt:trainInformationText"] ?? item["odpt:trainInformationStatus"] ?? "");
+    return {
+      line: routeName(item["odpt:railway"]),
+      detail: text,
+      updatedAt: String(item["dc:date"] ?? new Date().toISOString()),
+      frequency: Number(item["odpt:frequency"] ?? 0),
+    };
+  }).filter((item) => DISRUPTION_PATTERN.test(item.detail));
+  return { status: "ready", fetchedAt: new Date().toISOString(), incidents };
+}
+
 // Image security config. SVG sources with .svg extension auto-skip the
 // optimization endpoint on the client side (served directly, no proxy).
 // To route SVGs through the optimizer (with security headers), set
@@ -91,6 +142,41 @@ async function getWeather() {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/pc-temperature") {
+      if (!env.TEMPERATURE_CACHE) {
+        return json({ status: "setup_required", message: "温度監視の保存先はまだ設定されていません。" }, 503);
+      }
+
+      if (request.method === "GET") {
+        const latest = await env.TEMPERATURE_CACHE.get<TemperaturePayload>("latest", "json");
+        return json({ status: latest ? "ready" : "waiting", latest });
+      }
+
+      if (request.method === "POST") {
+        const authorization = request.headers.get("Authorization");
+        if (!env.PC_MONITOR_TOKEN || authorization !== `Bearer ${env.PC_MONITOR_TOKEN}`) {
+          return json({ error: "unauthorized" }, 401);
+        }
+        let payload: unknown;
+        try {
+          payload = await request.json();
+        } catch {
+          return json({ error: "invalid_json" }, 400);
+        }
+        if (!isTemperaturePayload(payload)) return json({ error: "invalid_temperature_payload" }, 400);
+        const normalized: TemperaturePayload = {
+          cpuTemperature: Math.round(payload.cpuTemperature * 10) / 10,
+          gpuTemperature: Math.round(payload.gpuTemperature * 10) / 10,
+          ...(typeof payload.pumpRpm === "number" && Number.isFinite(payload.pumpRpm) ? { pumpRpm: Math.round(payload.pumpRpm) } : {}),
+          capturedAt: payload.capturedAt,
+        };
+        await env.TEMPERATURE_CACHE.put("latest", JSON.stringify(normalized));
+        return json({ status: "saved", savedAt: new Date().toISOString() });
+      }
+
+      return json({ error: "method_not_allowed" }, 405);
+    }
 
     if (url.pathname === "/api/weather") {
       try {
@@ -109,7 +195,11 @@ const worker = {
           fetchedAt: new Date().toISOString(),
         });
       }
-      return Response.json({ status: "ready", incidents: [], fetchedAt: new Date().toISOString() });
+      try {
+        return Response.json(await getTransitInformation(env.ODPT_API_TOKEN), { headers: { "Cache-Control": "no-store" } });
+      } catch (error) {
+        return Response.json({ status: "error", message: error instanceof Error ? error.message : "運行情報を取得できませんでした。", incidents: [] }, { status: 502 });
+      }
     }
 
     if (url.pathname === "/_vinext/image") {
