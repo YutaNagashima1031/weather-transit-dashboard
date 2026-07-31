@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 
 type Place = { name: string; summary: string; now: string; high: number; low: number; hourly: string[][]; days?: string[][] };
 type Temperature = { cpuTemperature: number; gpuTemperature: number; pumpRpm?: number; capturedAt: string };
+type TransitIncident = { line: string; detail: string; updatedAt: string; frequency?: number };
+type Transit = { status: "ready" | "pending" | "error"; fetchedAt?: string; message?: string; incidents: TransitIncident[] };
 type Tab = "hourly" | "today" | "days";
 
 const fallbackPlaces: Place[] = [
@@ -29,6 +31,7 @@ export default function Home() {
   const [places, setPlaces] = useState<Place[]>(fallbackPlaces);
   const [temperature, setTemperature] = useState<Temperature | null>(null);
   const [temperatureStatus, setTemperatureStatus] = useState("PC監視ツールの接続待ち");
+  const [transit, setTransit] = useState<Transit>({ status: "pending", incidents: [], message: "運行情報を確認中です" });
 
   const updateWeather = async () => {
     const response = await fetch("/api/weather");
@@ -55,9 +58,20 @@ export default function Home() {
     }
   };
 
+  const updateTransit = async () => {
+    try {
+      const response = await fetch("/api/transit", { cache: "no-store" });
+      const data = await response.json() as Transit;
+      setTransit(data);
+    } catch {
+      setTransit({ status: "error", incidents: [], message: "運行情報を取得できません" });
+    }
+  };
+
   useEffect(() => {
     updateWeather().catch(() => setUpdated("天気情報を取得できません"));
     updateTemperature();
+    updateTransit();
     const temperatureTimer = window.setInterval(updateTemperature, 60_000);
     const saved = localStorage.getItem("theme");
     setDark(saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches);
@@ -72,7 +86,7 @@ export default function Home() {
   const refresh = async () => {
     setUpdating(true);
     try {
-      await Promise.all([updateWeather(), updateTemperature()]);
+      await Promise.all([updateWeather(), updateTemperature(), updateTransit()]);
     } finally {
       setUpdating(false);
     }
@@ -100,7 +114,7 @@ export default function Home() {
       <small className="temperature-note">注意: この表示は補助監視です。BIOS/UEFIの過熱時シャットダウン設定も有効にしてください。</small>
     </section>
 
-    <section className="transit wrap"><div className="transithead"><div><p>TRAIN STATUS</p><h2>首都圏の運行情報</h2><span>東京メトロ全線と対象JR路線のうち、遅延・事故・運転見合わせ・直通運転中止のみを表示します。</span></div><aside><b>!</b><strong>確認中</strong><small>ODPTの情報を利用</small></aside></div><div className="list"><div><i /><p><b>運行情報を確認中です</b><span>設定完了後、該当する路線だけがここに表示されます。</span></p><em>確認中</em></div></div><small>運行情報は更新ボタンで天気と同時に取得します。</small></section>
+    <section className="transit wrap"><div className="transithead"><div><p>TRAIN STATUS</p><h2>首都圏の運行情報</h2><span>東京メトロ全線と対象JR路線のうち、遅延・事故・運転見合わせ・直通運転中止のみを表示します。</span></div><aside><b>!</b><strong>{transit.status === "ready" ? transit.incidents.length : "…"}</strong><small>{transit.status === "ready" ? "対象の障害路線" : "情報を確認中"}</small></aside></div><div className="list">{transit.status === "ready" && transit.incidents.length === 0 ? <div><i /><p><b>現在、対象の障害情報はありません</b><span>首都圏の対象路線は通常どおり運行しています。</span></p><em>正常</em></div> : transit.incidents.map(item => <div key={`${item.line}-${item.updatedAt}`}><i /><p><b>{item.line}</b><span>{item.detail}</span></p><em>運行情報</em></div>)}{transit.status !== "ready" && <div><i /><p><b>{transit.message || "運行情報を確認中です"}</b><span>更新ボタンで天気と同時に再取得できます。</span></p><em>確認中</em></div>}</div><small>運行情報取得日時: {transit.fetchedAt ? jst(transit.fetchedAt) : "確認中"}</small></section>
     <footer className="wrap">首都圏 天気・運行情報 <span>表示時刻は日本時間です</span></footer>
   </main>;
 }
