@@ -10,3 +10,14 @@
 4. PowerShellで `pc-temperature-uploader.ps1` を実行します。終了は `Ctrl + C` です。
 
 `config.json` はトークンを含むためGitHubへ登録しません。
+
+## Windows起動時に自動で監視する
+
+1. Libre Hardware Monitorの `Options` → `Run On Windows Startup` を有効にします。
+2. このフォルダで `register-startup-task.ps1` を一度実行します。以後、Windowsへのログイン時に温度送信ツールがバックグラウンドで起動します。
+
+停止する場合は、PowerShellで次を実行します。
+
+```powershell
+Remove-Item -LiteralPath ([Environment]::GetFolderPath("Startup") + "\\WeatherTransitTemperatureMonitor.lnk")
+```

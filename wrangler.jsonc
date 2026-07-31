@@ -2,6 +2,13 @@
   "name": "weather-transit-dashboard",
   "main": "worker/index.ts",
   "compatibility_date": "2026-07-30",
+  "keep_vars": true,
+  "kv_namespaces": [
+    {
+      "binding": "TEMPERATURE_CACHE",
+      "id": "396705fecd91431ea0a3a52965395039"
+    }
+  ],
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "single-page-application"
