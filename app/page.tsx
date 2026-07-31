@@ -127,13 +127,14 @@ export default function Home() {
 
     <section id="top" className="hero wrap"><div><p>WEATHER & TRANSIT / TOKYO AREA</p><h1>今日の移動を、<br /><em>ひと目で。</em></h1><span>埼玉県川口市・東京都台東区の天気と、首都圏の運行情報をまとめて確認できます。</span></div><aside><b>☀</b><div><small>現在の東京エリア</small><strong>天気と運行情報</strong><span>更新ボタンで最新情報を取得</span></div></aside></section>
 
-    <section className="news wrap"><div className="news-title"><div><p>NEWS TOPICS</p><h2>主要ニュース</h2></div><small>ニュース更新: {news.fetchedAt ? jst(news.fetchedAt) : "読み込み中"}</small></div>
+    <div className="dashboard wrap"><aside className="future-space" aria-label="今後の機能追加用スペース" />
+    <section className="news"><div className="news-title"><div><p>NEWS TOPICS</p><h2>主要ニュース</h2></div><small>ニュース更新: {news.fetchedAt ? jst(news.fetchedAt) : "読み込み中"}</small></div>
       <nav>{NEWS_TABS.map(topic => <button className={newsTab === topic.key ? "active" : ""} onClick={() => setNewsTab(topic.key)} key={topic.key}>{topic.label}</button>)}</nav>
       <div className="news-list">{(news.topics[newsTab] ?? []).map(item => <a href={item.url} target="_blank" rel="noreferrer" key={item.url}><span>{item.title}</span><small>{item.source}</small></a>)}{news.status === "error" && <p>ニュース情報を取得できません。</p>}{news.status === "ready" && (news.topics[newsTab] ?? []).length === 0 && <p>ニュースを読み込み中です。</p>}</div>
       <small className="news-schedule">更新予定: 毎日 6:00 / 12:00 / 16:00 / 20:00</small>
     </section>
 
-    <section className="weather wrap"><div className="title"><div><p>WEATHER FORECAST</p><h2>2地点の天気予報</h2></div><small>取得日時: {updated || "読み込み中"}</small></div>
+    <section className="weather"><div className="title"><div><p>WEATHER FORECAST</p><h2>2地点の天気予報</h2></div><small>取得日時: {updated || "読み込み中"}</small></div>
       <nav>{([['hourly', '1時間ごと'], ['today', '今日・明日'], ['days', '今日〜3日後']] as const).map(([key, label]) => <button className={tab === key ? "active" : ""} onClick={() => setTab(key)} key={key}>{label}</button>)}</nav>
       <div className="cards">{places.map(place => <article key={place.name}><div className="cardhead"><div><small>{place.name}</small><h3>{place.summary}</h3></div><b>☀</b></div>
         {hasRainToday(place) && <p className="umbrella-notice">本日は降水確率があります。傘をお持ちください。</p>}
@@ -143,12 +144,13 @@ export default function Home() {
       </article>)}</div>
     </section>
 
-    <section className="temperature wrap"><div className="temperature-head"><div><p>PC TEMPERATURE MONITOR</p><h2>このPCの温度監視</h2><span>{temperatureStatus}・PC側は1分ごとに常時送信します。</span></div><span className="live"><i /> LIVE</span></div>
+    <section className="temperature"><div className="temperature-head"><div><p>PC TEMPERATURE MONITOR</p><h2>このPCの温度監視</h2><span>{temperatureStatus}・PC側は1分ごとに常時送信します。</span></div><span className="live"><i /> LIVE</span></div>
       <div className="temperature-cards two-columns"><div className={`temperature-card ${temperature ? temperatureState(temperature.cpuTemperature) : ""}`}><small>CPU 温度</small><strong>{temperature ? `${temperature.cpuTemperature}℃` : "--℃"}</strong><span>{temperature?.cpuName || "CPU名を取得中"}</span></div><div className={`temperature-card ${temperature ? temperatureState(temperature.gpuTemperature) : ""}`}><small>GPU 温度</small><strong>{temperature ? `${temperature.gpuTemperature}℃` : "--℃"}</strong><span>{temperature?.gpuName || "GPU名を取得中"}</span></div></div>
       <small className="temperature-note">温度情報が表示されない場合は、Libre Hardware Monitorが起動しているか、Remote Web Serverと送信ツールの設定を見直してください。表示は補助監視のため、BIOS/UEFIの過熱時シャットダウン設定も有効にしてください。</small>
     </section>
 
-    <section className="transit wrap"><div className="transithead"><div><p>TRAIN STATUS</p><h2>首都圏の運行情報</h2><span>東京メトロ全線と対象JR路線のうち、遅延・事故・運転見合わせ・直通運転中止のみを表示します。</span></div>{(transit.status !== "ready" || transit.incidents.length > 0) && <aside><b>!</b><strong>{transit.status === "ready" ? transit.incidents.length : "…"}</strong><small>{transit.status === "ready" ? "対象の障害路線" : "情報を確認中"}</small></aside>}</div><div className="list">{transit.status === "ready" && transit.incidents.length === 0 ? <div className="normal-status"><i /><p><b>現在、対象の障害情報はありません</b><span>首都圏の対象路線は通常どおり運行しています。</span></p><em>正常</em></div> : transit.incidents.map(item => <div key={`${item.line}-${item.updatedAt}`}><i /><p><b>{item.line}</b><span>{item.detail}</span></p><em>運行情報</em></div>)}{transit.status !== "ready" && <div><i /><p><b>{transit.message || "運行情報を確認中です"}</b><span>更新ボタンで天気と同時に再取得できます。</span></p><em>確認中</em></div>}</div><small>運行情報取得日時: {transit.fetchedAt ? jst(transit.fetchedAt) : "確認中"}</small></section>
+    <section className="transit"><div className="transithead"><div><p>TRAIN STATUS</p><h2>首都圏の運行情報</h2><span>東京メトロ全線と対象JR路線のうち、遅延・事故・運転見合わせ・直通運転中止のみを表示します。</span></div>{(transit.status !== "ready" || transit.incidents.length > 0) && <aside><b>!</b><strong>{transit.status === "ready" ? transit.incidents.length : "…"}</strong><small>{transit.status === "ready" ? "対象の障害路線" : "情報を確認中"}</small></aside>}</div><div className="list">{transit.status === "ready" && transit.incidents.length === 0 ? <div className="normal-status"><i /><p><b>現在、対象の障害情報はありません</b><span>首都圏の対象路線は通常どおり運行しています。</span></p><em>正常</em></div> : transit.incidents.map(item => <div key={`${item.line}-${item.updatedAt}`}><i /><p><b>{item.line}</b><span>{item.detail}</span></p><em>運行情報</em></div>)}{transit.status !== "ready" && <div><i /><p><b>{transit.message || "運行情報を確認中です"}</b><span>更新ボタンで天気と同時に再取得できます。</span></p><em>確認中</em></div>}</div><small>運行情報取得日時: {transit.fetchedAt ? jst(transit.fetchedAt) : "確認中"}</small></section>
+    </div>
     <footer className="wrap">首都圏 天気・運行情報 <span>表示時刻は日本時間です</span></footer>
   </main>;
 }
