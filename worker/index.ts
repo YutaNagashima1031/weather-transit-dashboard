@@ -213,7 +213,7 @@ function normalizeNewsTitle(title: string) {
 
 function toNewsItems(xml: string) {
   const seen = new Set<string>();
-  return (xml.match(/<item>[\s\S]*?<\/item>/gi) ?? []).slice(0, 20).map((item) => {
+  return (xml.match(/<item>[\s\S]*?<\/item>/gi) ?? []).slice(0, 50).map((item) => {
     const rawTitle = rssTag(item, "title");
     const parts = rawTitle.split(" - ");
     const source = parts.length > 1 ? parts.pop()! : "ニュース";
@@ -228,7 +228,7 @@ function toNewsItems(xml: string) {
     if (!item.title || !item.url || seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, 6);
+  }).slice(0, 10);
 }
 
 async function fetchNewsTopic(topic: typeof NEWS_TOPICS[number]) {
@@ -243,7 +243,7 @@ async function fetchNewsTopic(topic: typeof NEWS_TOPICS[number]) {
   throw new Error(`news_${topic.key}`);
 }
 
-async function getNews(previous: NewsPayload | null = null): Promise<NewsPayload> {
+async function getNews(previous: NewsPayload | null = null) {
   const entries = await Promise.all(NEWS_TOPICS.map(async (topic) => {
     try {
       return { key: topic.key, items: await fetchNewsTopic(topic), fresh: true };
@@ -254,16 +254,31 @@ async function getNews(previous: NewsPayload | null = null): Promise<NewsPayload
   const hasFreshData = entries.some((entry) => entry.fresh);
   if (!hasFreshData && !previous) throw new Error("news_unavailable");
   return {
-    status: "ready",
-    fetchedAt: hasFreshData ? new Date().toISOString() : previous!.fetchedAt,
-    topics: Object.fromEntries(entries.map((entry) => [entry.key, entry.items])) as Record<NewsTopic, NewsItem[]>,
+    news: {
+      status: "ready" as const,
+      fetchedAt: hasFreshData ? new Date().toISOString() : previous!.fetchedAt,
+      topics: Object.fromEntries(entries.map((entry) => [entry.key, entry.items])) as Record<NewsTopic, NewsItem[]>,
+    },
+    hasFailures: entries.some((entry) => !entry.fresh),
   };
 }
 
 async function refreshNewsCache(env: Env, previous: NewsPayload | null = null) {
-  const news = await getNews(previous);
-  if (env.TEMPERATURE_CACHE && news.fetchedAt !== previous?.fetchedAt) await env.TEMPERATURE_CACHE.put("news:latest", JSON.stringify(news));
-  return news;
+  try {
+    const { news, hasFailures } = await getNews(previous);
+    if (env.TEMPERATURE_CACHE && news.fetchedAt !== previous?.fetchedAt) await env.TEMPERATURE_CACHE.put("news:latest", JSON.stringify(news));
+    if (env.TEMPERATURE_CACHE) {
+      if (hasFailures) {
+        await env.TEMPERATURE_CACHE.put("news:retry-after", new Date(Date.now() + 30 * 60 * 1000).toISOString());
+      } else {
+        await env.TEMPERATURE_CACHE.delete("news:retry-after");
+      }
+    }
+    return news;
+  } catch (error) {
+    if (env.TEMPERATURE_CACHE) await env.TEMPERATURE_CACHE.put("news:retry-after", new Date(Date.now() + 30 * 60 * 1000).toISOString());
+    throw error;
+  }
 }
 
 function lastScheduledNewsRefreshTime(now = new Date()) {
@@ -283,6 +298,17 @@ function lastScheduledNewsRefreshTime(now = new Date()) {
   const targetHour = hour ?? 20;
   const targetDay = hour === undefined ? values.day - 1 : values.day;
   return Date.UTC(values.year, values.month - 1, targetDay, targetHour - 9, 0, 0);
+}
+
+function isRegularNewsRefreshTime(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    hour: "numeric",
+    minute: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, Number(part.value)]));
+  return values.minute === 0 && [6, 12, 16, 20].includes(values.hour);
 }
 
 // Image security config. SVG sources with .svg extension auto-skip the
@@ -390,7 +416,9 @@ const worker = {
   },
   async scheduled(_controller: unknown, env: Env) {
     const cached = env.TEMPERATURE_CACHE ? await env.TEMPERATURE_CACHE.get<NewsPayload>("news:latest", "json") : null;
-    await refreshNewsCache(env, cached);
+    const retryAfter = env.TEMPERATURE_CACHE ? await env.TEMPERATURE_CACHE.get("news:retry-after") : null;
+    const retryDue = Boolean(retryAfter && Date.parse(retryAfter) <= Date.now());
+    if (isRegularNewsRefreshTime() || retryDue) await refreshNewsCache(env, cached);
   },
 };
 

@@ -4,7 +4,7 @@
   "compatibility_date": "2026-07-30",
   "keep_vars": true,
   "triggers": {
-    "crons": ["0 21 * * *", "0 3 * * *", "0 7 * * *", "0 11 * * *"]
+    "crons": ["0,30 * * * *"]
   },
   "kv_namespaces": [
     {
