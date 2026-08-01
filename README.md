@@ -26,6 +26,17 @@ Cloudflare Workers KVの無料枠を超えないよう、PC側とCloudflare側�
 
 この二重制御により、古いPC送信ツールが一時的に動いたままでも、Cloudflare KVへの過剰な書き込みを防ぎます。監視表示が更新されない場合は、Libre Hardware Monitorの起動、Remote Web Server、`pc-monitor/config.json`、およびスタートアップ設定を確認してください。
 
+### Libre Hardware Monitorの常駐設定
+
+温度を継続して送信するには、Libre Hardware MonitorをPC上で常駐させる必要があります。`Options` で次を有効にしてください。
+
+- `Run On Windows Startup`
+- `Start Minimized`
+- `Minimize to Tray`（必要に応じて `Minimize On Close`）
+- `Remote Web Server` の `Run`、interface `192.168.11.13`、port `8085`
+
+設定後に `http://localhost:8085/data.json` が表示できれば、センサー情報を送信できる状態です。Webサイトの更新時刻は最短5分ごとで、日本時間2:00〜5:59は意図的に更新を停止します。
+
 詳細なセットアップ手順は [pc-monitor/README.md](pc-monitor/README.md) を参照してください。
 
 ## ニュース更新

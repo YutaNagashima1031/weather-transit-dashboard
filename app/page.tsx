@@ -144,7 +144,7 @@ export default function Home() {
       </article>)}</div>
     </section>
 
-    <section className="temperature"><div className="temperature-head"><div><p>PC TEMPERATURE MONITOR</p><h2>このPCの温度監視</h2><span>{temperatureStatus}・PC側は1分ごとに常時送信します。</span></div><span className="live"><i /> LIVE</span></div>
+    <section className="temperature"><div className="temperature-head"><div><p>PC TEMPERATURE MONITOR</p><h2>このPCの温度監視</h2><span>{temperatureStatus}・PC側は5分ごとに送信します（2:00〜5:59は停止）。</span></div><span className="live"><i /> LIVE</span></div>
       <div className="temperature-cards two-columns"><div className={`temperature-card ${temperature ? temperatureState(temperature.cpuTemperature) : ""}`}><small>CPU 温度</small><strong>{temperature ? `${temperature.cpuTemperature}℃` : "--℃"}</strong><span>{temperature?.cpuName || "CPU名を取得中"}</span></div><div className={`temperature-card ${temperature ? temperatureState(temperature.gpuTemperature) : ""}`}><small>GPU 温度</small><strong>{temperature ? `${temperature.gpuTemperature}℃` : "--℃"}</strong><span>{temperature?.gpuName || "GPU名を取得中"}</span></div></div>
       <small className="temperature-note">温度情報が表示されない場合は、Libre Hardware Monitorが起動しているか、Remote Web Serverと送信ツールの設定を見直してください。表示は補助監視のため、BIOS/UEFIの過熱時シャットダウン設定も有効にしてください。</small>
     </section>
