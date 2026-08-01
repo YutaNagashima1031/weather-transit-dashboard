@@ -45,6 +45,19 @@ function isTemperaturePayload(value: unknown): value is TemperaturePayload {
     && typeof data.capturedAt === "string" && !Number.isNaN(Date.parse(data.capturedAt));
 }
 
+function isTemperatureQuietHours() {
+  const hour = Number(new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date()));
+  return hour >= 2 && hour < 6;
+}
+
+function wasSavedWithinFiveMinutes(latest: TemperaturePayload | null) {
+  return Boolean(latest && Date.now() - Date.parse(latest.capturedAt) < 5 * 60 * 1000);
+}
+
 const WEATHER_LOCATIONS = [
   { name: "埼玉県川口市", latitude: 35.8077, longitude: 139.7241 },
   { name: "東京都台東区", latitude: 35.7126, longitude: 139.78 },
@@ -242,6 +255,13 @@ const worker = {
           return json({ error: "invalid_json" }, 400);
         }
         if (!isTemperaturePayload(payload)) return json({ error: "invalid_temperature_payload" }, 400);
+        if (isTemperatureQuietHours()) {
+          return json({ status: "skipped", reason: "quiet_hours" });
+        }
+        const latest = await env.TEMPERATURE_CACHE.get<TemperaturePayload>("latest", "json");
+        if (wasSavedWithinFiveMinutes(latest)) {
+          return json({ status: "skipped", reason: "five_minute_interval" });
+        }
         const normalized: TemperaturePayload = {
           cpuTemperature: Math.round(payload.cpuTemperature * 10) / 10,
           gpuTemperature: Math.round(payload.gpuTemperature * 10) / 10,

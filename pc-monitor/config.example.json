@@ -2,5 +2,5 @@
   "workerUrl": "https://weather-transit-dashboard.thirteen-devils1031.workers.dev",
   "token": "Cloudflareで作成するPC_MONITOR_TOKENの値",
   "sensorUrl": "http://localhost:8085/data.json",
-  "intervalSeconds": 60
+  "intervalSeconds": 300
 }

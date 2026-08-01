@@ -7,6 +7,7 @@ if (-not (Test-Path -LiteralPath $ConfigPath)) {
   throw "config.json is missing. Copy config.example.json to config.json first."
 }
 $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+$intervalSeconds = [Math]::Max(300, [int]$config.intervalSeconds)
 
 function Get-AllSensors($node) {
   $result = @()
@@ -48,6 +49,14 @@ function Find-HardwareName($nodes, [string[]]$patterns) {
 }
 
 while ($true) {
+  $now = Get-Date
+  if ($now.Hour -ge 2 -and $now.Hour -lt 6) {
+    $resumeAt = $now.Date.AddHours(6)
+    $pauseSeconds = [Math]::Max(60, [int]($resumeAt - $now).TotalSeconds)
+    Write-Host "$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss') Paused until 06:00"
+    Start-Sleep -Seconds $pauseSeconds
+    continue
+  }
   try {
     $tree = Invoke-RestMethod -Uri $config.sensorUrl -TimeoutSec 10
     $sensors = Get-AllSensors $tree
@@ -67,10 +76,14 @@ while ($true) {
     if ($null -ne $cpuName) { $payload.cpuName = $cpuName }
     if ($null -ne $gpuName) { $payload.gpuName = $gpuName }
     if ($null -ne $pump) { $payload.pumpRpm = $pump }
-    Invoke-RestMethod -Method Post -Uri "$($config.workerUrl.TrimEnd('/'))/api/pc-temperature" -Headers @{ Authorization = "Bearer $($config.token)" } -ContentType "application/json" -Body ($payload | ConvertTo-Json -Compress) | Out-Null
-    Write-Host "$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss') Uploaded: CPU $cpu C / GPU $gpu C"
+    $response = Invoke-RestMethod -Method Post -Uri "$($config.workerUrl.TrimEnd('/'))/api/pc-temperature" -Headers @{ Authorization = "Bearer $($config.token)" } -ContentType "application/json" -Body ($payload | ConvertTo-Json -Compress)
+    if ($response.status -eq "saved") {
+      Write-Host "$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss') Uploaded: CPU $cpu C / GPU $gpu C"
+    } else {
+      Write-Host "$(Get-Date -Format 'yyyy/MM/dd HH:mm:ss') Skipped: $($response.reason)"
+    }
   } catch {
     Write-Warning $_.Exception.Message
   }
-  Start-Sleep -Seconds ([int]$config.intervalSeconds)
+  Start-Sleep -Seconds $intervalSeconds
 }
