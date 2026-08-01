@@ -191,8 +191,16 @@ function rssTag(item: string, tag: string) {
   return matched ? decodeXml(matched[1]) : "";
 }
 
+function normalizeNewsTitle(title: string) {
+  return title.normalize("NFKC")
+    .replace(/[\s　]/g, "")
+    .replace(/[「」『』【】〔〕（）()\[\]…・:：!！?？、,，.。]/g, "")
+    .toLowerCase();
+}
+
 function toNewsItems(xml: string) {
-  return (xml.match(/<item>[\s\S]*?<\/item>/gi) ?? []).slice(0, 6).map((item) => {
+  const seen = new Set<string>();
+  return (xml.match(/<item>[\s\S]*?<\/item>/gi) ?? []).slice(0, 20).map((item) => {
     const rawTitle = rssTag(item, "title");
     const parts = rawTitle.split(" - ");
     const source = parts.length > 1 ? parts.pop()! : "ニュース";
@@ -202,7 +210,12 @@ function toNewsItems(xml: string) {
       url: rssTag(item, "link"),
       publishedAt: rssTag(item, "pubDate"),
     };
-  }).filter((item) => item.title && item.url);
+  }).filter((item) => {
+    const key = normalizeNewsTitle(item.title);
+    if (!item.title || !item.url || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 6);
 }
 
 async function getNews(): Promise<NewsPayload> {
@@ -221,6 +234,25 @@ async function refreshNewsCache(env: Env) {
   const news = await getNews();
   if (env.TEMPERATURE_CACHE) await env.TEMPERATURE_CACHE.put("news:latest", JSON.stringify(news));
   return news;
+}
+
+function lastScheduledNewsRefreshTime(now = new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    hourCycle: "h23",
+  });
+  const values = Object.fromEntries(formatter.formatToParts(now)
+    .filter((part) => part.type !== "literal")
+    .map((part) => [part.type, Number(part.value)]));
+  const schedule = [20, 16, 12, 6];
+  const hour = schedule.find((value) => value <= values.hour);
+  const targetHour = hour ?? 20;
+  const targetDay = hour === undefined ? values.day - 1 : values.day;
+  return Date.UTC(values.year, values.month - 1, targetDay, targetHour - 9, 0, 0);
 }
 
 // Image security config. SVG sources with .svg extension auto-skip the
@@ -304,7 +336,8 @@ const worker = {
     if (url.pathname === "/api/news") {
       try {
         const cached = env.TEMPERATURE_CACHE ? await env.TEMPERATURE_CACHE.get<NewsPayload>("news:latest", "json") : null;
-        return json(cached ?? await refreshNewsCache(env));
+        const needsRefresh = !cached || Date.parse(cached.fetchedAt) < lastScheduledNewsRefreshTime();
+        return json(needsRefresh ? await refreshNewsCache(env) : cached);
       } catch {
         return json({ status: "error", fetchedAt: new Date().toISOString(), topics: {} }, 502);
       }
@@ -323,8 +356,8 @@ const worker = {
 
     return handler.fetch(request, env, ctx);
   },
-  async scheduled(_controller: unknown, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(refreshNewsCache(env).catch(() => undefined));
+  async scheduled(_controller: unknown, env: Env) {
+    await refreshNewsCache(env);
   },
 };
 
