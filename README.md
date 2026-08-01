@@ -1,56 +1,60 @@
 # 首都圏 天気・運行情報
 
-埼玉県川口市・東京都台東区の天気予報、首都圏の運行障害情報、そして自身のゲーミングPCの温度を1画面で確認するダッシュボードです。
+埼玉県川口市・東京都台東区の天気、首都圏の運行情報、このPCのCPU/GPU温度、必要な分野に絞った主要ニュースをまとめて確認できるダッシュボードです。
 
 公開URL: <https://weather-transit-dashboard.thirteen-devils1031.workers.dev>
 
 ## 主な機能
 
-- 2地点の天気予報を、1時間ごと・今日と明日・今日から3日後までのタブで表示
-- 天気情報と運行情報を1つの更新操作で再取得
-- ライト／ダークモードの切替
-- 東京メトロ全線と対象JR路線について、遅延・事故・運転見合わせ・直通運転中止だけを表示
-- CPU・GPU温度と、水冷ポンプ回転数（取得可能な場合）を表示するPC温度監視
+- 2地点の天気予報を「1時間ごと」「今日・明日」「今日〜3日後」で表示
+- ライトモード / ダークモード切替
+- 東京メトロ全線および対象JR路線の障害情報のみを表示
+- CPU/GPU温度をCloudflare KV経由で常時監視
+- 日本政治、国内・天気、IT、投資信託・指数のニュースをタブで表示
 
-## ポートフォリオとしての工夫
+## PC温度監視と無料枠対策
 
-### 外部データを安全に集約
+PC側ではLibre Hardware MonitorのRemote Web Serverから温度を取得し、PowerShell送信ツールがCloudflare Workerへ送信します。`pc-monitor/config.json` にはアクセストークンを保存するため、`.gitignore` によりGitHubへは送信されません。
 
-天気と運行情報の外部APIは、ブラウザから直接呼び出さずCloudflare Workerで取得します。アクセストークンをブラウザやGitHubへ露出させず、画面側には必要な情報だけを返す構成です。
+Cloudflare Workers KVの無料枠を超えないよう、PC側とCloudflare側の両方で書き込みを制御しています。
 
-### 「異常だけ見せる」情報設計
+- PC側: 送信間隔を最短5分に制限
+- PC側: 日本時間2:00〜5:59は送信を停止
+- Cloudflare側: 5分未満の連続保存を拒否
+- Cloudflare側: 日本時間2:00〜5:59は保存を拒否
+- 想定KV書き込み: 約244回/日（無料枠の1,000回/日以内）
 
-運行情報では正常な路線を並べず、利用者に影響がある4種類の障害だけを抽出して表示します。情報量を減らし、朝の移動前に判断しやすい画面を目指しました。
+この二重制御により、古いPC送信ツールが一時的に動いたままでも、Cloudflare KVへの過剰な書き込みを防ぎます。監視表示が更新されない場合は、Libre Hardware Monitorの起動、Remote Web Server、`pc-monitor/config.json`、およびスタートアップ設定を確認してください。
 
-### 常時監視と閲覧時更新を分離
+詳細なセットアップ手順は [pc-monitor/README.md](pc-monitor/README.md) を参照してください。
 
-PC側の補助ツールは1分ごとに温度を送信し続け、Webサイトは開かれたときだけ最新値を読み取ります。これにより、サイトを閉じている間も次回閲覧時に直近の温度を確認でき、不要なブラウザ通信を抑えられます。
+## ニュース更新
 
-### コストを抑えた最新値のみの保存
+ニュースは毎日、日本時間の **6:00 / 12:00 / 16:00 / 20:00** にCloudflare Workersのスケジュール実行で更新します。
 
-温度は履歴をためず、Cloudflare KVに最新の1件だけを保存します。個人利用では1日1,440回の送信に留まり、無料枠を意識した軽量な構成です。
-
-### セキュリティを分離
-
-PCからの温度送信は専用シークレットで認証します。シークレットを含む `pc-monitor/config.json` は `.gitignore` で除外し、GitHubへ送信しません。共有するのは安全な設定例 `config.example.json` のみです。
+- 定時更新に失敗して古いキャッシュが残った場合、画面またはニュースAPIへの次回アクセス時に自動で再取得します。
+- RSSの見出しを正規化して比較し、配信元が異なっても同じ見出しのニュースは重複表示しません。
+- 重複を除外した後も各タブの表示件数を確保できるよう、候補を追加で取得します。
 
 ## 技術構成
 
 - Frontend: React / TypeScript / Vinext
-- Backend: Cloudflare Workers
-- Temperature storage: Cloudflare KV
+- Backend / Hosting: Cloudflare Workers
+- Temperature storage: Cloudflare Workers KV
 - Weather: Open-Meteo Forecast API
 - Transit: 公共交通オープンデータセンター（ODPT）API
-- PC sensor: Libre Hardware Monitor + PowerShell uploader
+- PC sensor: Libre Hardware Monitor + PowerShell
+- News: Google News RSS
 
-## PC温度監視の設定
+## ローカル実行
 
-詳細は [pc-monitor/README.md](pc-monitor/README.md) を参照してください。Libre Hardware Monitorを起動し、Remote Web Serverを有効化したうえで、送信ツールを設定します。温度が表示されない場合は、Libre Hardware Monitorの起動状態・Remote Web Server・`config.json` の接続先を確認してください。PC側の設定値を含む `config.json` はGitHubに公開しないでください。
-
-## ローカル起動
-
-Windows PowerShellでは、フォルダ名に `&` が含まれるためパスを引用符で囲んでください。
+Windows PowerShellでプロジェクト直下から実行します。
 
 ```powershell
-node node_modules\vinext\dist\cli.js dev
+node .\node_modules\vinext\dist\cli.js dev
 ```
+
+## 注意事項
+
+- `pc-monitor/config.json`、APIトークン、CloudflareのSecretは公開しません。
+- PC温度監視は補助的な監視です。BIOS/UEFIの温度保護・シャットダウン設定も有効にしてください。
