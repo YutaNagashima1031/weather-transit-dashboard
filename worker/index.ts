@@ -393,7 +393,9 @@ const worker = {
       let cached: NewsPayload | null = null;
       try {
         cached = env.TEMPERATURE_CACHE ? await env.TEMPERATURE_CACHE.get<NewsPayload>("news:latest", "json") : null;
-        const needsRefresh = !cached || Date.parse(cached.fetchedAt) < lastScheduledNewsRefreshTime();
+        const needsRefresh = !cached
+          || Date.parse(cached.fetchedAt) < lastScheduledNewsRefreshTime()
+          || NEWS_TOPICS.some((topic) => (cached.topics[topic.key] ?? []).length < 10);
         return json(needsRefresh ? await refreshNewsCache(env, cached) : cached);
       } catch {
         if (cached) return json(cached);
