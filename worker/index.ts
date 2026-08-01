@@ -231,21 +231,38 @@ function toNewsItems(xml: string) {
   }).slice(0, 6);
 }
 
-async function getNews(): Promise<NewsPayload> {
-  const entries = await Promise.all(NEWS_TOPICS.map(async (topic) => {
-    const params = new URLSearchParams({ q: topic.query, hl: "ja", gl: "JP", ceid: "JP:ja" });
+async function fetchNewsTopic(topic: typeof NEWS_TOPICS[number]) {
+  const params = new URLSearchParams({ q: topic.query, hl: "ja", gl: "JP", ceid: "JP:ja" });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     const response = await fetch(`https://news.google.com/rss/search?${params}`, {
-      headers: { "User-Agent": "weather-transit-dashboard/1.0" },
+      headers: { Accept: "application/rss+xml, application/xml;q=0.9, */*;q=0.8" },
     });
-    if (!response.ok) throw new Error(`news_${topic.key}`);
-    return [topic.key, toNewsItems(await response.text())] as const;
-  }));
-  return { status: "ready", fetchedAt: new Date().toISOString(), topics: Object.fromEntries(entries) as Record<NewsTopic, NewsItem[]> };
+    if (response.ok) return toNewsItems(await response.text());
+    if (attempt === 0 && response.status >= 500) await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  throw new Error(`news_${topic.key}`);
 }
 
-async function refreshNewsCache(env: Env) {
-  const news = await getNews();
-  if (env.TEMPERATURE_CACHE) await env.TEMPERATURE_CACHE.put("news:latest", JSON.stringify(news));
+async function getNews(previous: NewsPayload | null = null): Promise<NewsPayload> {
+  const entries = await Promise.all(NEWS_TOPICS.map(async (topic) => {
+    try {
+      return { key: topic.key, items: await fetchNewsTopic(topic), fresh: true };
+    } catch {
+      return { key: topic.key, items: previous?.topics[topic.key] ?? [], fresh: false };
+    }
+  }));
+  const hasFreshData = entries.some((entry) => entry.fresh);
+  if (!hasFreshData && !previous) throw new Error("news_unavailable");
+  return {
+    status: "ready",
+    fetchedAt: hasFreshData ? new Date().toISOString() : previous!.fetchedAt,
+    topics: Object.fromEntries(entries.map((entry) => [entry.key, entry.items])) as Record<NewsTopic, NewsItem[]>,
+  };
+}
+
+async function refreshNewsCache(env: Env, previous: NewsPayload | null = null) {
+  const news = await getNews(previous);
+  if (env.TEMPERATURE_CACHE && news.fetchedAt !== previous?.fetchedAt) await env.TEMPERATURE_CACHE.put("news:latest", JSON.stringify(news));
   return news;
 }
 
@@ -347,11 +364,13 @@ const worker = {
     }
 
     if (url.pathname === "/api/news") {
+      let cached: NewsPayload | null = null;
       try {
-        const cached = env.TEMPERATURE_CACHE ? await env.TEMPERATURE_CACHE.get<NewsPayload>("news:latest", "json") : null;
+        cached = env.TEMPERATURE_CACHE ? await env.TEMPERATURE_CACHE.get<NewsPayload>("news:latest", "json") : null;
         const needsRefresh = !cached || Date.parse(cached.fetchedAt) < lastScheduledNewsRefreshTime();
-        return json(needsRefresh ? await refreshNewsCache(env) : cached);
+        return json(needsRefresh ? await refreshNewsCache(env, cached) : cached);
       } catch {
+        if (cached) return json(cached);
         return json({ status: "error", fetchedAt: new Date().toISOString(), topics: {} }, 502);
       }
     }
@@ -370,7 +389,8 @@ const worker = {
     return handler.fetch(request, env, ctx);
   },
   async scheduled(_controller: unknown, env: Env) {
-    await refreshNewsCache(env);
+    const cached = env.TEMPERATURE_CACHE ? await env.TEMPERATURE_CACHE.get<NewsPayload>("news:latest", "json") : null;
+    await refreshNewsCache(env, cached);
   },
 };
 
