@@ -86,7 +86,6 @@ async function getWeather() {
     latitude: WEATHER_LOCATIONS.map((location) => location.latitude).join(","),
     longitude: WEATHER_LOCATIONS.map((location) => location.longitude).join(","),
     timezone: "Asia/Tokyo",
-    forecast_hours: "12",
     forecast_days: "4",
     current: "temperature_2m,weather_code",
     hourly: "temperature_2m,precipitation,precipitation_probability,weather_code",
@@ -97,42 +96,56 @@ async function getWeather() {
   const results = await response.json() as Array<any>;
   return {
     fetchedAt: new Date().toISOString(),
-    places: results.map((result, index) => ({
+    places: results.map((result, index) => {
+      const currentHourIndex = Math.max(0, result.hourly.time.findIndex((time: string) => time >= result.current.time));
+      const probability = (date: string, fromHour: number, toHour: number) => {
+        const values = result.hourly.time.map((time: string, hour: number) => ({
+          time,
+          probability: result.hourly.precipitation_probability[hour],
+          precipitation: result.hourly.precipitation[hour],
+        }))
+          .filter(({ time, precipitation }: { time: string; precipitation: number }) => time.startsWith(date)
+            && Number(time.slice(11, 13)) >= fromHour
+            && Number(time.slice(11, 13)) <= toHour
+            && precipitation > 0)
+          .map(({ probability }: { probability: number }) => probability);
+        return values.length ? Math.max(...values) : 0;
+      };
+      const rainProbabilityForDay = (day: number) => probability(result.daily.time[day], 0, 23);
+      return {
       name: WEATHER_LOCATIONS[index].name,
       summary: weatherLabel(result.current.weather_code),
       now: `${Math.round(result.current.temperature_2m)}°`,
       high: Math.round(result.daily.temperature_2m_max[0]),
       low: Math.round(result.daily.temperature_2m_min[0]),
-      hourly: result.hourly.time.slice(0, 12).map((time: string, hour: number) => [
+      hourly: result.hourly.time.slice(currentHourIndex, currentHourIndex + 12).map((time: string, offset: number) => {
+        const hour = currentHourIndex + offset;
+        return [
         hour === 0 ? "いま" : `${time.slice(11, 13)}時`,
         weatherEmoji(result.hourly.weather_code[hour]),
         `${Math.round(result.hourly.temperature_2m[hour])}°`,
         `${result.hourly.precipitation[hour]}mm`,
-      ]),
+        ];
+      }),
       days: result.daily.time.slice(0, 4).map((_: string, day: number) => [
         ["今日", "明日", "明後日", "3日後"][day],
         weatherEmoji(result.daily.weather_code[day]),
         `${Math.round(result.daily.temperature_2m_max[day])}°`,
         `${Math.round(result.daily.temperature_2m_min[day])}°`,
-        `${result.daily.precipitation_probability_max[day]}%`,
+        `${rainProbabilityForDay(day)}%`,
       ]),
       todayTomorrow: result.daily.time.slice(0, 2).map((date: string, day: number) => {
-        const probability = (fromHour: number, toHour: number) => {
-          const values = result.hourly.time.map((time: string, hour: number) => ({ time, value: result.hourly.precipitation_probability[hour] }))
-            .filter(({ time }: { time: string }) => time.startsWith(date) && Number(time.slice(11, 13)) >= fromHour && Number(time.slice(11, 13)) <= toHour)
-            .map(({ value }: { value: number }) => value);
-          return values.length ? Math.max(...values) : 0;
-        };
         return {
           key: day === 0 ? "today" : "tomorrow",
           emoji: weatherEmoji(result.daily.weather_code[day]),
           high: Math.round(result.daily.temperature_2m_max[day]),
           low: Math.round(result.daily.temperature_2m_min[day]),
-          morning: probability(0, 11),
-          afternoon: probability(12, 23),
+          morning: probability(date, 0, 11),
+          afternoon: probability(date, 12, 23),
         };
       }),
-    })),
+    };
+    }),
   };
 }
 
