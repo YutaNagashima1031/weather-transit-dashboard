@@ -235,7 +235,10 @@ async function fetchNewsTopic(topic: typeof NEWS_TOPICS[number]) {
   const params = new URLSearchParams({ q: topic.query, hl: "ja", gl: "JP", ceid: "JP:ja" });
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const response = await fetch(`https://news.google.com/rss/search?${params}`, {
-      headers: { Accept: "application/rss+xml, application/xml;q=0.9, */*;q=0.8" },
+      headers: {
+        Accept: "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
+        "User-Agent": "Mozilla/5.0 (compatible; WeatherTransitDashboard/1.0; +https://weather-transit-dashboard.thirteen-devils1031.workers.dev)",
+      },
     });
     if (response.ok) return toNewsItems(await response.text());
     if (attempt === 0 && response.status >= 500) await new Promise((resolve) => setTimeout(resolve, 300));
